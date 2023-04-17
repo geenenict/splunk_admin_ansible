@@ -1,0 +1,162 @@
+---
+- name: Prepare OS for Splunk, install Splunk and setup boot-start
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    # Handle chmod and chown on unix systems
+    - name: install acl package
+      ansible.builtin.package:
+        name: acl
+        state: present
+      become: True
+
+    - name: Add nix splunk group
+      group:
+        name: "{{ splunk_nix_group }}"
+        state: present
+      become: true 
+
+    - name: Add nix splunk user
+      user:
+        name: "{{ splunk_nix_user }}"
+        group: "{{ splunk_nix_group }}"
+        home: "/opt/splunk"
+        state: present
+        shell: /bin/bash
+      become: true
+
+    # Task to configure ulimits and THP for Splunk
+    - name: Disable THP
+      block:
+        - name: Copy systemd disable-thp unit file
+          copy:
+            src: "{{ playbook_dir }}/files/disable-thp.service"
+            dest: /etc/systemd/system/disable-thp.service
+            mode: 0644
+            owner: root
+            group: root
+
+        - name: Reload systemctl
+          ansible.builtin.systemd:
+            daemon_reload: yes
+
+        - name: Enable disable-thp unit file
+          service:
+            name: disable-thp.service
+            enabled: yes
+            state: started
+
+      become: true
+
+    - name: Add splunk ports to UFW
+      community.general.ufw:
+        port: "{{ item.number }}"
+        proto: "{{ item.protocol }}"
+        rule: allow
+        state: reloaded
+        comment: "{{ item.desc | default('') }}"
+      become: true
+      loop: "{{ splunk_firewall_ports }}"
+
+    - debug:
+        msg: "The splunk_package_url is set to: {{ splunk_package_url }}"
+
+    - debug:
+        msg: "The filename that will be downloaded is {{ splunk_file }}"
+
+    - debug:
+        msg: "The upgrade file will be downloaded to {{ splunk_package_path }}/{{ splunk_file }}"
+
+    - name: "Download Splunk package"
+      become: false
+      get_url:
+        url: "{{ splunk_package_url }}"
+        dest: "{{ splunk_package_path }}/{{ splunk_file }}"
+      delegate_to: localhost
+      register: download_result
+      retries: 3
+      delay: 10
+      until: download_result is success
+      run_once: true
+
+    - name: Copy Splunk file to remote hosts
+      ansible.builtin.copy:
+        src: "{{ splunk_package_path }}/{{ splunk_file }}"
+        dest: "{{ splunk_package_dest_path }}/{{ splunk_file }}"
+        mode: '0644'
+        remote_src: no
+
+    - name: Set file owner and group to splunk:splunk
+      ansible.builtin.file:
+        path: "{{ splunk_package_dest_path }}/{{ splunk_file }}"
+        owner: "{{ splunk_nix_user }}"
+        group: "{{ splunk_nix_group }}"
+        state: file
+
+    - name: Install Splunk package using dpkg
+      ansible.builtin.apt:
+        deb: "{{ splunk_package_dest_path }}/{{ splunk_file }}"
+      become: true
+
+    - name: Install splunk.secret
+      copy:
+        src: "{{ playbook_dir }}/files/splunk.secret"
+        dest: "{{ splunk_home }}/etc/auth/splunk.secret"
+        owner: "{{ splunk_nix_user }}"
+        group: "{{ splunk_nix_group }}"
+        mode: 0644
+      become: true
+
+    - name: Create user-seed.conf file with splunk_admin_username and splunk_admin_password
+      template:
+        src: user-seed.conf.j2
+        dest: "{{ splunk_home }}/etc/system/local/user-seed.conf"
+        owner: "{{ splunk_nix_user }}"
+        group: "{{ splunk_nix_group }}"
+        mode: 0644
+      become: true
+
+    - name: Enable splunk boot-start via systemd
+      command: "{{ splunk_home }}/bin/splunk enable boot-start -user {{ splunk_nix_user }} -group {{ splunk_nix_group }} -systemd-managed 1 -systemd-unit-file-name {{ systemd_unit }} -create-polkit-rules {{ splunk_create_polkit }} --answer-yes --auto-ports --no-prompt --accept-license"
+      become: true
+
+    - name: Update the systemd file for Splunk and set core limits
+      ini_file:
+        path: "/etc/systemd/system/{{ splunk_service }}.service"
+        section: Service
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+        mode: 0644
+      become: true
+      loop:
+        - { option: "LimitNOFILE", value: "1024000" }
+        - { option: "LimitNPROC", value: "512000" }
+        - { option: "LimitFSIZE", value: "infinity" }
+        - { option: "LimitDATA", value: "infinity" }
+        - { option: "LimitCORE", value: "infinity" }
+        - { option: "TasksMax", value: "infinity" }
+
+    - name: Reload systemctl
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: "Ensure correct ownership for {{ splunk_home }}/etc"
+      file:
+        path: "{{ splunk_home }}/etc"
+        owner: "{{ splunk_nix_user }}"
+        group: "{{ splunk_nix_group }}"
+        recurse: true
+      become: true
+
+    - name: Start Splunk service
+      ansible.builtin.systemd:
+        name: "{{ splunk_service }}"
+        state: started
+      become: true
+
+    # Deploymentclient conf
+    # Set license (configure license master)
+    # pstack
+    # diag, crashlogs, cleanups
+    # touch .ui_login

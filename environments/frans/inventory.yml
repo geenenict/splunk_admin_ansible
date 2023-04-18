@@ -1,6 +1,18 @@
-demo:
+all:
   hosts:
-    splunk-demo:
+    frans-sh1:
+    frans-sh2:
+    frans-sh3:
+    frans-idx1:
+    frans-idx2:
+    frans-idx3:
+    frans-shc:
+    frans-icm:
+    frans-hf:
+    frans-dmc:
+    frans-uf:
+    frans-lm:
+    frans-ds:
   vars:
     ansible_user: beheerder
     ansible_ssh_private_key_file: ~/.ssh/id_rsa

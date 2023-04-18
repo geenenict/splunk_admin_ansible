@@ -1,0 +1,31 @@
+---
+ansible_ssh_private_key_file: /home/beheerder/.ssh/id_rsa
+
+splunk_service: "Splunkd"
+systemd_unit: "Splunkd"
+splunk_create_polkit: 0
+splunk_home: "/opt/splunk/"
+splunkd_port: 8089
+splunkweb_port: {desc: "Splunk Web", protocol: "tcp", number: 8000}
+splunkhec_port: {desc: "Splunk HEC", protocol: "tcp", number: 8088}
+splunktcpin_port: {desc: "Splunk TCPIN", protocol: "tcp", number: 9997}
+splunkapi_port: {desc: "Splunk API", protocol: "tcp", number: "{{ splunkd_port }}"}
+
+splunk_admin_username: admin
+splunk_admin_password: eduvision
+splunk_secret_file: 
+splunk_file: "splunk-8.2.9-4a20fb65aa78-linux-2.6-amd64.deb"
+splunk_package_url: "https://download.splunk.com/products/splunk/releases/8.2.9/linux/splunk-8.2.9-4a20fb65aa78-linux-2.6-amd64.deb"
+#splunk_package_url: "https://download.splunk.com/products/splunk/releases/9.0.4.1/linux/splunk-9.0.4.1-419ad9369127-linux-2.6-amd64.deb"
+#splunk_package_url_uf: "https://download.splunk.com/products/universalforwarder/releases/9.0.4/linux/splunkforwarder-9.0.4-de405f4a7979-Linux-armv8.deb"
+
+splunk_package_path: ~/ 
+splunk_package_dest_path: /tmp
+splunk_nix_user: splunk 
+splunk_nix_group: splunk
+
+splunk_firewall_ports:
+  - "{{ splunkweb_port }}"
+  - "{{ splunkapi_port }}"
+  - "{{ splunktcpin_port }}"
+  - "{{ splunkhec_port }}"

@@ -1,0 +1,18 @@
+all:
+  hosts:
+    student3-sh1:
+    student3-sh2:
+    student3-sh3:
+    student3-idx1:
+    student3-idx2:
+    student3-idx3:
+    student3-shc:
+    student3-icm:
+    student3-hf:
+    student3-dmc:
+    student3-uf:
+    student3-lm:
+    student3-ds:
+  vars:
+    ansible_user: beheerder
+    ansible_ssh_private_key_file: ~/.ssh/id_rsa
